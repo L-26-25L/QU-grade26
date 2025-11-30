@@ -112,7 +112,7 @@ function renderSidebar(){
   state.courses.forEach(c=>{
     const btn = document.createElement('button');
     btn.className = 'course-btn';
-    btn.innerHTML = <span style="font-weight:600">${c.name}</span>;
+    btn.innerHTML = `<span style="font-weight:600">${c.name}</span>`;
     btn.onclick = ()=> onCourseClick(c.id);
     coursesList.appendChild(btn);
   });
