@@ -364,3 +364,171 @@ function attachActions(){
 
 /* initial render */
 renderDashboard()
+// -------- Load & Save ---------
+
+function loadData() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        try { return JSON.parse(saved); }
+        catch { return DEFAULT; }
+    }
+    return DEFAULT;
+}
+
+function saveData(data) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let DATA = loadData();
+
+
+// --------- Build Left Menu ---------
+
+function buildMenu() {
+    const list = document.getElementById("courseList");
+    list.innerHTML = "";
+    DATA.courses.forEach(c => {
+        const li = document.createElement("li");
+        li.textContent = c.name;
+        li.onclick = () => showCourse(c.id);
+        list.appendChild(li);
+    });
+}
+
+buildMenu();
+
+
+// -------- Show Course Table ---------
+
+function showCourse(id) {
+    const container = document.getElementById("courseDetails");
+    container.innerHTML = "";
+
+    const course = DATA.courses.find(c => c.id === id);
+    if (!course) return;
+
+    const title = document.createElement("h2");
+    title.textContent = course.name;
+    container.appendChild(title);
+
+    const table = document.createElement("table");
+    table.className = "gradeTable";
+
+    table.innerHTML = `
+        <tr>
+            <th>Type</th><th>Name</th><th>Required</th><th>Obtained</th>
+        </tr>
+    `;
+
+    course.items.forEach((it, index) => {
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+            <td>${it.type}</td>
+            <td>${it.name}</td>
+            <td>${it.max}</td>
+            <td><input type="number" value="${it.val}" data-c="${course.id}" data-i="${index}"></td>
+        `;
+
+        table.appendChild(row);
+    });
+
+    container.appendChild(table);
+
+    container.style.display = "block";
+
+    setupInputs();
+}
+
+
+// ------- Save data on edit ---------
+
+function setupInputs() {
+    document.querySelectorAll("input[data-c]").forEach(inp => {
+        inp.oninput = () => {
+            let c = inp.dataset.c;
+            let i = inp.dataset.i;
+            let course = DATA.courses.find(x => x.id === c);
+            course.items[i].val = Number(inp.value);
+            saveData(DATA);
+            updateMyGrade();
+        };
+    });
+}
+
+
+// -------- Calculations --------
+
+function calcCourse(course) {
+    let totalMax = 0, totalVal = 0;
+
+    const quizes = course.items.filter(i => i.type === "Quiz");
+    const others = course.items.filter(i => i.type !== "Quiz");
+
+    // اختيار أفضل الكويزات و حذف الأسوأ
+    if (quizes.length > 1) {
+        const sorted = [...quizes].sort((a,b)=>b.val-a.val);
+        const keep = sorted.slice(0, quizes.length - 1);
+        keep.forEach(k => { totalMax += k.max; totalVal += k.val; });
+    } else if (quizes.length === 1) {
+        totalMax += quizes[0].max;
+        totalVal += quizes[0].val;
+    }
+
+    others.forEach(it => {
+        totalMax += it.max;
+        totalVal += it.val;
+    });
+
+    return { totalMax, totalVal };
+}
+
+
+// --------- Update My Grade ----------
+
+function updateMyGrade() {
+    const box = document.getElementById("myGradeBox");
+    box.innerHTML = "";
+
+    DATA.courses.forEach(c => {
+        const r = calcCourse(c);
+
+        const div = document.createElement("div");
+        div.className = "gradeCard";
+        div.innerHTML = `
+            <h3>${c.name}</h3>
+            <p>${r.totalVal} / ${r.totalMax}</p>
+        `;
+
+        box.appendChild(div);
+    });
+}
+
+updateMyGrade();
+
+
+// ------ Buttons (Export / Import) ---------
+
+document.getElementById("exportBtn").onclick = () => {
+    navigator.clipboard.writeText(JSON.stringify(DATA));
+    alert("Copied!");
+};
+
+document.getElementById("importBtn").onclick = () => {
+    const txt = prompt("Paste data:");
+    if (txt) {
+        DATA = JSON.parse(txt);
+        saveData(DATA);
+        buildMenu();
+        updateMyGrade();
+    }
+};
+
+document.getElementById("resetBtn").onclick = () => {
+    if (confirm("Delete all data?")) {
+        DATA = DEFAULT;
+        saveData(DATA);
+        buildMenu();
+        updateMyGrade();
+    }
+};
