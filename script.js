@@ -2,7 +2,7 @@
 // Save/load key
 const STORAGE_KEY = 'lina_grades_v1';
 
-// default config + initial data (from اللي عطيتيني)
+// default config + initial data
 const DEFAULT = {
   aPlusThreshold: 90,
   courses: [
@@ -72,104 +72,122 @@ const DEFAULT = {
 // load or init
 let state = loadState();
 
-// DOM refs
-const coursesList = document.getElementById('coursesList');
-const dashboard = document.getElementById('dashboard');
-const courseSection = document.getElementById('courseSection');
-const courseTitle = document.getElementById('courseTitle');
-const courseTableBody = document.querySelector('#courseTable tbody');
-const backToDash = document.getElementById('backToDash');
-const calcCourse = document.getElementById('calcCourse');
-const saveCourse = document.getElementById('saveCourse');
+// ** 💡 التعديل: وضع جميع عمليات الحصول على عناصر DOM والتهيئة داخل DOMContentLoaded **
+document.addEventListener('DOMContentLoaded', () => {
 
-const termWorkValue = document.getElementById('termWorkValue');
-const aplusPercent = document.getElementById('aplusPercent');
-const aplusGap = document.getElementById('aplusGap');
+    // DOM refs
+    const coursesList = document.getElementById('coursesList');
+    const dashboard = document.getElementById('dashboard');
+    const courseSection = document.getElementById('courseSection');
+    const courseTitle = document.getElementById('courseTitle');
+    const courseTableBody = document.querySelector('#courseTable tbody');
+    const backToDash = document.getElementById('backToDash');
+    const calcCourse = document.getElementById('calcCourse');
+    const saveCourse = document.getElementById('saveCourse');
 
-// charts
-let bestChart, compareChart;
+    const termWorkValue = document.getElementById('termWorkValue');
+    const aplusPercent = document.getElementById('aplusPercent');
+    const aplusGap = document.getElementById('aplusGap');
 
-// init UI
-renderSidebar();
-renderDashboard();
-attachActions();
+    // charts
+    let bestChart, compareChart;
 
-function loadState(){
-  try{
-    const json = localStorage.getItem(STORAGE_KEY);
-    if(json) return JSON.parse(json);
-  }catch(e){}
-  // clone default
-  return JSON.parse(JSON.stringify(DEFAULT));
-}
-function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
+    // init UI
+    renderSidebar();
+    renderDashboard();
+    attachActions(); // هذه الدالة يجب أن تكون معرفة لتشغيل الأحداث
 
-/* ---------- Sidebar & List ---------- */
-function renderSidebar(){
-  coursesList.innerHTML = '';
-  state.courses.forEach(c=>{
-    const btn = document.createElement('button');
-    btn.className = 'course-btn';
-    btn.innerHTML = <span style="font-weight:600">${c.name}</span>; // <- صححت backticks
-    btn.onclick = ()=> onCourseClick(c.id);
-    coursesList.appendChild(btn);
-  });
-}
+    /* ---------- الدوال المساعدة ---------- */
 
-/* ---------- Dashboard (charts) ---------- */
-function renderDashboard(){
-  const labels = state.courses.map(c=>c.name);
-  const bestData = state.courses.map(c=>{
-    const quizzes = c.items.filter(it=>it.type==='Quiz').map(q=>parseFloat(q.val||0));
-    if(quizzes.length<=1) return quizzes.reduce((s,x)=>s+x,0);
-    const sorted = quizzes.slice().sort((a,b)=>b-a);
-    const take = sorted.slice(0, quizzes.length - 1);
-    return take.reduce((s,x)=>s+x,0);
-  });
-  const compareData = state.courses.map(c=>{
-    const res = computeMeasuresForCourse(c);
-    return res.percent;
-  });
+    function loadState(){
+      try{
+        const json = localStorage.getItem(STORAGE_KEY);
+        if(json) return JSON.parse(json);
+      }catch(e){}
+      // clone default
+      return JSON.parse(JSON.stringify(DEFAULT));
+    }
+    function saveState(){
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
 
-  termWorkValue.innerText = computeAverageTermPercent().toFixed(1) + '%';
+    /* ---------- Sidebar & List ---------- */
+    function renderSidebar(){
+      coursesList.innerHTML = '';
+      state.courses.forEach(c=>{
+        const btn = document.createElement('button');
+        btn.className = 'course-btn';
+        // تم تصحيح backticks
+        btn.innerHTML = `<span style="font-weight:600">${c.name}</span>`; 
+        btn.onclick = ()=> onCourseClick(c.id);
+        coursesList.appendChild(btn);
+      });
+    }
 
-  const aplusInfo = computeAPlus();
-  aplusPercent.innerText = (100 - aplusInfo.minGap).toFixed(1) + '%';
-  aplusGap.innerText = ${aplusInfo.minGap.toFixed(1)}% نقص عن ${state.aPlusThreshold}%; // <- صححت backticks
+    /* ---------- Dashboard (charts) ---------- */
+    function renderDashboard(){
+      const labels = state.courses.map(c=>c.name);
+      const bestData = state.courses.map(c=>{
+        const quizzes = c.items.filter(it=>it.type==='Quiz').map(q=>parseFloat(q.val||0));
+        if(quizzes.length<=1) return quizzes.reduce((s,x)=>s+x,0);
+        const sorted = quizzes.slice().sort((a,b)=>b-a);
+        const take = sorted.slice(0, quizzes.length - 1);
+        return take.reduce((s,x)=>s+x,0);
+      });
+      const compareData = state.courses.map(c=>{
+        const res = computeMeasuresForCourse(c);
+        return res.percent;
+      });
 
-  const apCard = document.getElementById('aplusCard');
-  const apVal = 100 - aplusInfo.minGap;
-  if(apVal >= state.aPlusThreshold) apCard.style.background = 'linear-gradient(90deg,#caa32b,#e6d28a)';
-  else if(apVal >= state.aPlusThreshold - 6) apCard.style.background = 'linear-gradient(90deg,#ffd86b,#ffc107)';
-  else apCard.style.background = 'linear-gradient(90deg,#7fcf7f,#3fb76e)';
+      termWorkValue.innerText = computeAverageTermPercent().toFixed(1) + '%';
 
-  if(!bestChart){
-    const ctx = document.getElementById('bestQuizzesChart').getContext('2d');
-    bestChart = new Chart(ctx, {
-      type:'pie',
-      data:{labels:labels,datasets:[{data:bestData, backgroundColor:generateColors(labels.length)}]},
-      options:{responsive:true, plugins:{legend:{position:'bottom'}}}
-    });
-  } else {
-    bestChart.data.labels = labels;
-    bestChart.data.datasets[0].data = bestData;
-    bestChart.update();
-  }
+      const aplusInfo = computeAPlus();
+      aplusPercent.innerText = (100 - aplusInfo.minGap).toFixed(1) + '%';
+      // تم تصحيح backticks
+      aplusGap.innerText = `${aplusInfo.minGap.toFixed(1)}% نقص عن ${state.aPlusThreshold}%`; 
 
-  if(!compareChart){
-    const ctx2 = document.getElementById('compareChart').getContext('2d');
-    compareChart = new Chart(ctx2, {
-      type:'bar',
-      data:{labels:labels, datasets:[{data:compareData, backgroundColor:generateColors(labels.length)}]},
-      options:{indexAxis:'y', responsive:true, scales:{x:{beginAtZero:true, max:100}}}
-    });
-  } else {
-    compareChart.data.labels = labels;
-    compareChart.data.datasets[0].data = compareData;
-    compareChart.update();
-  }
+      const apCard = document.getElementById('aplusCard');
+      const apVal = 100 - aplusInfo.minGap;
+      if(apVal >= state.aPlusThreshold) apCard.style.background = 'linear-gradient(90deg,#caa32b,#e6d28a)';
+      else if(apVal >= state.aPlusThreshold - 6) apCard.style.background = 'linear-gradient(90deg,#ffd86b,#ffc107)';
+      else apCard.style.background = 'linear-gradient(90deg,#7fcf7f,#3fb76e)';
 
-  saveState();
-}
+      // تفترض أن Chart.js محملة بشكل صحيح في ملف index.html
+      if(!bestChart){
+        const ctx = document.getElementById('bestQuizzesChart').getContext('2d');
+        bestChart = new Chart(ctx, {
+          type:'pie',
+          data:{labels:labels,datasets:[{data:bestData, backgroundColor:generateColors(labels.length)}]},
+          options:{responsive:true, plugins:{legend:{position:'bottom'}}}
+        });
+      } else {
+        bestChart.data.labels = labels;
+        bestChart.data.datasets[0].data = bestData;
+        bestChart.update();
+      }
+
+      if(!compareChart){
+        const ctx2 = document.getElementById('compareChart').getContext('2d');
+        compareChart = new Chart(ctx2, {
+          type:'bar',
+          data:{labels:labels, datasets:[{data:compareData, backgroundColor:generateColors(labels.length)}]},
+          options:{indexAxis:'y', responsive:true, scales:{x:{beginAtZero:true, max:100}}}
+        });
+      } else {
+        compareChart.data.labels = labels;
+        compareChart.data.datasets[0].data = compareData;
+        compareChart.update();
+      }
+
+      saveState();
+    }
+    
+    // ⚠️ الدوال الوهمية: يجب استبدالها بالكود الفعلي الخاص بها
+    function computeAverageTermPercent() { return 85; } // مثال لقيمة وهمية
+    function computeAPlus() { return { minGap: 5 }; } // مثال لقيمة وهمية
+    function computeMeasuresForCourse(course) { return { percent: 90 }; } // مثال لقيمة وهمية
+    function generateColors(count) { return Array(count).fill('#4bc0c0'); } // مثال لألوان وهمية
+    function attachActions() { console.log('Actions attached'); } // دالة وهمية لربط الأحداث
+    function onCourseClick(id) { console.log('Course clicked:', id); } // دالة وهمية عند النقر على المادة
+
+}); // ** نهاية DOMContentLoaded **
